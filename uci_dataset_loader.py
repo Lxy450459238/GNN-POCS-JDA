@@ -94,32 +94,66 @@ def convert_to_pyg_graphs(X_dense, y, R_s_tensor, domain_id):
     # 增加维度以适配 GATv2Conv 的 edge_dim
     edge_attr = torch.tensor(edge_attr, dtype=torch.float32).unsqueeze(-1)
 
+    # ★ 核心修复：创建一个 16x16 的对角矩阵，作为 16 个传感器的绝对身份标识
+    one_hot_id = torch.eye(16, dtype=torch.float32)
+
     graph_list = []
     for i in range(num_samples):
-        node_features = torch.tensor(X_reshaped[i], dtype=torch.float32)
+        # 原始的 8 维时序特征 [16, 8]
+        raw_features = torch.tensor(X_reshaped[i], dtype=torch.float32)
+
+        # ★ 将 8 维特征与 16 维身份标识拼接，变成 [16, 24]
+        node_features = torch.cat([raw_features, one_hot_id], dim=1)
+
         label = torch.tensor([y[i]], dtype=torch.long)
         domain = torch.tensor([domain_id], dtype=torch.long)
 
-        data = Data(x=node_features, edge_index=edge_index, edge_attr=edge_attr, y=label, domain=domain)
+        # 如果你之前加了 id 用于 EMA，保留它
+        sample_id = torch.tensor([i], dtype=torch.long)
+
+        data = Data(x=node_features, edge_index=edge_index, edge_attr=edge_attr, y=label, domain=domain, id=sample_id)
         graph_list.append(data)
 
     return graph_list
 
 
-# 仅供纯注意力消融实验使用的备用函数（已剥离物理先验）
-def convert_to_pyg_graphs_pure_attention(X_dense, y, domain_id):
-    num_samples = X_dense.shape[0]
-    X_reshaped = X_dense.reshape(num_samples, 16, 8)
-    edge_index = [[i, j] for i in range(16) for j in range(16)]
+def convert_to_pyg_graphs_pure_attention(X, y, domain_id):
+    """
+    转换为 PyG 的 Data 格式 (纯注意力，无边权重)，同时加入 16 维物理身份证！
+    """
+    num_samples = X.shape[0]
+    num_sensors = 16
+    features_per_sensor = 8
+
+    X_reshaped = X.reshape(num_samples, num_sensors, features_per_sensor)
+
+    # 构建全连接图 (没有先验)
+    edge_index = []
+    for i in range(num_sensors):
+        for j in range(num_sensors):
+            edge_index.append([i, j])
     edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+
+    # ★ 核心修复：16维身份标识矩阵
+    one_hot_id = torch.eye(16, dtype=torch.float32)
 
     graph_list = []
     for i in range(num_samples):
-        node_features = torch.tensor(X_reshaped[i], dtype=torch.float32)
+        # 8维原始特征
+        raw_features = torch.tensor(X_reshaped[i], dtype=torch.float32)
+
+        # ★ 拼接变成 24维 (8 + 16)
+        node_features = torch.cat([raw_features, one_hot_id], dim=1)
+
         label = torch.tensor([y[i]], dtype=torch.long)
         domain = torch.tensor([domain_id], dtype=torch.long)
-        data = Data(x=node_features, edge_index=edge_index, y=label, domain=domain)
+
+        # 加上 id，支持后续的 EMA
+        sample_id = torch.tensor([i], dtype=torch.long)
+
+        data = Data(x=node_features, edge_index=edge_index, y=label, domain=domain, id=sample_id)
         graph_list.append(data)
+
     return graph_list
 
 

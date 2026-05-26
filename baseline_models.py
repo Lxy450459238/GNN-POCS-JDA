@@ -39,7 +39,7 @@ def main():
     print(">>> [基线模型测试] 正在加载跨年期漂移数据 (Batch 1 -> Batch 5)...")
     # 注意：请确保这里的路径是你真实的 dat 文件路径
     path_source = r"D:\pythonProject-mathmodel\GNN\Dataset\batch1.dat"
-    path_target = r"D:\pythonProject-mathmodel\GNN\Dataset\batch1.dat"
+    path_target = r"D:\pythonProject-mathmodel\GNN\Dataset\batch10.dat"
 
     # 数据加载 (严格保证目标域使用源域的 scaler)
     X_source, y_source, scaler_s = load_uci_batch(path_source)

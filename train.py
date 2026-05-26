@@ -120,7 +120,7 @@ def main():
     # 阶段二：模型与超参数初始化
     # ==========================================
     print("\n>>> 阶段二：点火启动 GNN 骨架...")
-    model = RobustDriftGNN(num_node_features=8, hidden_dim=64, embed_dim=32, num_classes=6)
+    model = RobustDriftGNN(num_node_features=24, hidden_dim=64, embed_dim=32, num_classes=6)
     optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-4)
     # 新增：余弦退火学习率调度器，让学习率慢慢降到 0
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
@@ -171,6 +171,7 @@ def main():
             loss = loss_cls + current_lambda * loss_jda + current_gamma * loss_pocs
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             # --- 统计指标 ---

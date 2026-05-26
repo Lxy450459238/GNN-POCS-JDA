@@ -1,0 +1,10 @@
+__pycache__/
+.agents/
+.claude/
+.backup_step1/
+backup_phase0/
+*.rar
+*.log
+test.txt
+skills-lock.json
+*.pyc

@@ -55,8 +55,7 @@ def main():
         print("=" * 50)
 
         # 初始化模型时传入当前的 heads
-        model = RobustDriftGNN(num_node_features=8, hidden_dim=64, embed_dim=32, num_classes=6, heads_layer1=heads)
-        model.is_pure_attention_mode = False  # 确保开启物理引导
+        model = RobustDriftGNN(num_node_features=24, hidden_dim=64, embed_dim=32, num_classes=6, heads_layer1=heads)
 
         optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-4)
         criterion_cls = nn.CrossEntropyLoss()
@@ -90,6 +89,7 @@ def main():
 
                 loss = loss_cls + current_lambda * loss_jda + current_gamma * loss_pocs
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
                 # 记录目标域准确率
