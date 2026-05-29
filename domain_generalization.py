@@ -10,8 +10,9 @@ import torch, torch.nn as nn, torch.optim as optim, torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 import numpy as np, pandas as pd, random, os, sys
 
-from uci_dataset_loader import load_uci_batch, build_physical_adjacency, convert_to_pyg_graphs
+from uci_dataset_loader import build_physical_adjacency, convert_to_pyg_graphs
 from model import RobustDriftGNN
+from sklearn.preprocessing import StandardScaler
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DATA_DIR = "Dataset"
@@ -22,6 +23,24 @@ LR = 0.005
 TRAIN_BATCHES = [1, 2, 3, 4, 5]
 TEST_BATCHES = [6, 7, 8, 9, 10]
 SEEDS = [42, 123, 456]
+
+
+def _read_raw_uci(file_path):
+    """Read raw (unscaled) data from a UCI .dat file. Returns X, y."""
+    X, y_list = [], []
+    with open(file_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if not parts:
+                continue
+            label = int(parts[0].split(';')[0]) - 1
+            y_list.append(label)
+            features = []
+            for part in parts[1:]:
+                _, feature_val = part.split(':')
+                features.append(float(feature_val))
+            X.append(features)
+    return np.array(X, dtype=np.float32), np.array(y_list, dtype=np.int64)
 
 
 def seed_everything(seed):
@@ -53,20 +72,19 @@ def run_one_seed(seed):
 
     seed_everything(seed)
 
-    # Load all training batches, fit scaler on concatenated data
-    X_parts, y_parts = [], []
+    # Load raw (unscaled) training batches, then fit ONE global scaler
+    X_raw_parts, y_raw_parts = [], []
     for bn in TRAIN_BATCHES:
-        X, y, _ = load_uci_batch(f"{DATA_DIR}/batch{bn}.dat")
-        X_parts.append(X); y_parts.append(y)
-        print(f"  Loaded B{bn}: {len(y)} samples")
+        X_raw, y_raw = _read_raw_uci(f"{DATA_DIR}/batch{bn}.dat")
+        X_raw_parts.append(X_raw); y_raw_parts.append(y_raw)
+        print(f"  Loaded B{bn}: {len(y_raw)} samples (raw)")
 
-    X_train_all = np.concatenate(X_parts, axis=0)
-    y_train_all = np.concatenate(y_parts, axis=0)
+    X_raw_all = np.concatenate(X_raw_parts, axis=0)
+    y_train_all = np.concatenate(y_raw_parts, axis=0)
 
-    # Fit scaler on ALL training data
-    from sklearn.preprocessing import StandardScaler
+    # Fit ONE global scaler on all raw training data
     scaler = StandardScaler()
-    X_train_all = scaler.fit_transform(X_train_all)
+    X_train_all = scaler.fit_transform(X_raw_all)
 
     print(f"  Total training samples: {len(y_train_all)}")
 
@@ -108,7 +126,8 @@ def run_one_seed(seed):
     print(f"\n  In-distribution (training batches):")
     train_accs = []
     for bn in TRAIN_BATCHES:
-        X, y, _ = load_uci_batch(f"{DATA_DIR}/batch{bn}.dat", scaler=scaler)
+        X_raw, y = _read_raw_uci(f"{DATA_DIR}/batch{bn}.dat")
+        X = scaler.transform(X_raw)
         acc = evaluate(model, X, y, Rs)
         train_accs.append(acc)
         print(f"    B{bn}: {acc:.1f}%")
@@ -117,7 +136,8 @@ def run_one_seed(seed):
     print(f"\n  Zero-shot (test batches):")
     results = []
     for bn in TEST_BATCHES:
-        X, y, _ = load_uci_batch(f"{DATA_DIR}/batch{bn}.dat", scaler=scaler)
+        X_raw, y = _read_raw_uci(f"{DATA_DIR}/batch{bn}.dat")
+        X = scaler.transform(X_raw)
         acc = evaluate(model, X, y, Rs)
         print(f"    B{bn}: {acc:.1f}%")
         results.append({
