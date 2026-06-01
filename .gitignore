@@ -8,3 +8,5 @@ backup_phase0/
 test.txt
 skills-lock.json
 *.pyc
+.mcp.json
+screenshots/
